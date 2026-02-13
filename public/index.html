@@ -39,22 +39,48 @@
             gap: 15px;
         }
 
-        #refresh-btn {
-            background: #00e5ff;
-            color: #121212;
+        button {
             border: none;
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-            transition: background 0.2s;
+            transition: all 0.2s;
+        }
+
+        #start-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        #start-btn:hover {
+            background: #45a049;
+        }
+
+        #stop-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        #stop-btn:hover {
+            background: #d32f2f;
+        }
+
+        #refresh-btn {
+            background: #00e5ff;
+            color: #121212;
         }
 
         #refresh-btn:hover {
             background: #00b8d4;
         }
 
-        #refresh-btn:active {
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:active {
             transform: scale(0.98);
         }
 
@@ -97,6 +123,8 @@
         <header>
             <h1>Moltbook AI Insights Only Made by yours trully - Uly</h1>
             <div class="controls">
+                <button id="start-btn">Start</button>
+                <button id="stop-btn">Stop</button>
                 <select id="post-limit">
                     <option value="5">Show 5</option>
                     <option value="10">Show 10</option>
@@ -108,6 +136,8 @@
         </header>
 
         <main id="feedback-list">
+            <div id="agent-status" style="margin-bottom: 20px; font-weight: bold;">Agent Status: <span
+                    id="run-state">Checking...</span></div>
             <div id="status">Scanning...</div>
             <div class="card">
                 <div class="meta"><span class="tag">Post</span> <span class="timestamp">2026-02-12 15:00</span></div>
@@ -152,22 +182,94 @@
             document.getElementById('status').innerText = `Total Insights: ${items.length}`;
         }
 
-        document.getElementById('refresh-btn').addEventListener('click', () => {
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                const stateText = document.getElementById('run-state');
+                const startBtn = document.getElementById('start-btn');
+                const stopBtn = document.getElementById('stop-btn');
+
+                if (data.running) {
+                    stateText.innerText = 'RUNNING';
+                    stateText.style.color = '#4caf50';
+                    startBtn.disabled = true;
+                    // Stop button is clickable only when start has been pressed and agent is running
+                    stopBtn.disabled = false;
+                } else {
+                    stateText.innerText = 'STOPPED';
+                    stateText.style.color = '#f44336';
+                    startBtn.disabled = false;
+                    // Stop button remains greyed out and unclickable until Start is pressed
+                    stopBtn.disabled = true;
+                }
+            } catch (err) {
+                console.error('Failed to check status');
+            }
+        }
+
+        document.getElementById('start-btn').addEventListener('click', async () => {
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = true; // Immediately gray out
+            startBtn.innerText = 'Starting...';
+
+            try {
+                await fetch('/api/start', { method: 'POST' });
+            } finally {
+                startBtn.innerText = 'Start';
+                // Note: checkStatus will keep it disabled if it successfully started
+                await checkStatus();
+            }
+        });
+
+        document.getElementById('stop-btn').addEventListener('click', async () => {
+            const stopBtn = document.getElementById('stop-btn');
+            stopBtn.disabled = true; // Gray out upon pressing
+            stopBtn.innerText = 'Stopping...';
+
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+            } finally {
+                stopBtn.innerText = 'Stop';
+                // Note: checkStatus will re-enable Start button (lifting gray out)
+                await checkStatus();
+            }
+        });
+
+        document.getElementById('refresh-btn').addEventListener('click', async () => {
             const btn = document.getElementById('refresh-btn');
+            const originalText = btn.innerText;
             btn.innerText = 'Refreshing...';
             btn.disabled = true;
-            fetchFeedback().finally(() => {
+
+            try {
+                await fetchFeedback();
+
+                const statusRes = await fetch('/api/status');
+                const statusData = await statusRes.json();
+
+                // Automatically triggers start if agent isn't already running
+                if (!statusData.running) {
+                    console.log('Refresh triggered agent start...');
+                    await fetch('/api/start', { method: 'POST' });
+                    await checkStatus();
+                }
+            } catch (err) {
+                console.error('Refresh/Start sequence failed', err);
+            } finally {
                 setTimeout(() => {
-                    btn.innerText = 'Refresh Now';
+                    btn.innerText = originalText;
                     btn.disabled = false;
                 }, 500);
-            });
+            }
         });
 
         document.getElementById('post-limit').addEventListener('change', fetchFeedback);
 
         setInterval(fetchFeedback, 5000);
+        setInterval(checkStatus, 3000);
         fetchFeedback();
+        checkStatus();
     </script>
 </body>
 

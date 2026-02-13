@@ -15,14 +15,30 @@ class MoltAgent {
         this.pollInterval = parseInt(process.env.POLLING_INTERVAL_MS) || 60000;
         this.processedItems = new Set();
         this.feedbackList = [];
+        this.intervalId = null;
         logToFile('MoltAgent initialized');
     }
 
     async start() {
-        console.log('Moltbook AI Agent started...');
+        if (this.intervalId) {
+            console.log('Moltbook AI Agent is already running.');
+            return;
+        }
+        console.log('Moltbook AI Agent starting...');
         logToFile('Moltbook AI Agent started');
-        this.run();
-        setInterval(() => this.run(), this.pollInterval);
+        await this.run();
+        this.intervalId = setInterval(() => this.run(), this.pollInterval);
+    }
+
+    stop() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+            console.log('Moltbook AI Agent stopped.');
+            logToFile('Moltbook AI Agent stopped');
+        } else {
+            console.log('Moltbook AI Agent is not running.');
+        }
     }
 
     async run() {

@@ -8,9 +8,8 @@ const port = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Start the agent
+// Initialize the agent (but don't start polling yet)
 const agent = new MoltAgent();
-agent.start();
 
 // Every time the agent runs, it should save feedback to public/feedback.json
 const originalRun = agent.run.bind(agent);
@@ -24,6 +23,20 @@ agent.run = async () => {
 
 app.get('/api/feedback', (req, res) => {
     res.json(agent.getFeedback());
+});
+
+app.post('/api/start', async (req, res) => {
+    await agent.start();
+    res.json({ status: 'running' });
+});
+
+app.post('/api/stop', (req, res) => {
+    agent.stop();
+    res.json({ status: 'stopped' });
+});
+
+app.get('/api/status', (req, res) => {
+    res.json({ running: !!agent.intervalId });
 });
 
 app.listen(port, () => {
