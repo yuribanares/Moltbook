@@ -16,29 +16,42 @@ class MoltAgent {
         this.processedItems = new Set();
         this.feedbackList = [];
         this.intervalId = null;
+        this.isStarting = false;
         logToFile('MoltAgent initialized');
     }
 
     async start() {
-        if (this.intervalId) {
-            console.log('Moltbook AI Agent is already running.');
+        if (this.intervalId || this.isStarting) {
+            console.log('Moltbook AI Agent is already running or starting.');
             return;
         }
+
         console.log('Moltbook AI Agent starting...');
         logToFile('Moltbook AI Agent started');
-        await this.run();
+
+        this.isStarting = true;
         this.intervalId = setInterval(() => this.run(), this.pollInterval);
+
+        // Initial run in background
+        this.run().catch(err => {
+            console.error('Initial run failed:', err.message);
+        }).finally(() => {
+            this.isStarting = false;
+        });
     }
 
     stop() {
+        console.log('Stop request received');
+        logToFile('Stop request received');
+
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
-            console.log('Moltbook AI Agent stopped.');
-            logToFile('Moltbook AI Agent stopped');
-        } else {
-            console.log('Moltbook AI Agent is not running.');
         }
+
+        this.isStarting = false;
+        console.log('Moltbook AI Agent stopped.');
+        logToFile('Moltbook AI Agent stopped');
     }
 
     async run() {

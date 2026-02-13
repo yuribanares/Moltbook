@@ -25,9 +25,9 @@ app.get('/api/feedback', (req, res) => {
     res.json(agent.getFeedback());
 });
 
-app.post('/api/start', async (req, res) => {
-    await agent.start();
-    res.json({ status: 'running' });
+app.post('/api/start', (req, res) => {
+    agent.start(); // Non-blocking
+    res.json({ status: 'starting' });
 });
 
 app.post('/api/stop', (req, res) => {
@@ -36,7 +36,10 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.get('/api/status', (req, res) => {
-    res.json({ running: !!agent.intervalId });
+    res.json({
+        running: !!agent.intervalId,
+        starting: agent.isStarting
+    });
 });
 
 app.listen(port, () => {

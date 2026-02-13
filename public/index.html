@@ -46,6 +46,8 @@
             cursor: pointer;
             font-weight: bold;
             transition: all 0.2s;
+            min-width: 120px;
+            /* Ensure equal size based on longest text */
         }
 
         #start-btn {
@@ -120,17 +122,23 @@
 
 <body>
     <div class="container">
-        <header>
-            <h1>Moltbook AI Insights Only Made by yours trully - Uly</h1>
+        <header style="align-items: flex-start;">
+            <div>
+                <h1>Moltbook AI Insights Only Made by yours trully - Uly</h1>
+                <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                    <label for="post-limit" style="font-size: 0.9rem; color: #888;">Display Limit:</label>
+                    <select id="post-limit"
+                        style="background: #333; color: white; border: 1px solid #444; padding: 4px; border-radius: 4px;">
+                        <option value="5">Show 5</option>
+                        <option value="10">Show 10</option>
+                        <option value="15">Show 15</option>
+                        <option value="20" selected>Show 20</option>
+                    </select>
+                </div>
+            </div>
             <div class="controls">
                 <button id="start-btn">Start</button>
                 <button id="stop-btn">Stop</button>
-                <select id="post-limit">
-                    <option value="5">Show 5</option>
-                    <option value="10">Show 10</option>
-                    <option value="15">Show 15</option>
-                    <option value="20" selected>Show 20</option>
-                </select>
                 <button id="refresh-btn">Refresh Now</button>
             </div>
         </header>
@@ -190,17 +198,20 @@
                 const startBtn = document.getElementById('start-btn');
                 const stopBtn = document.getElementById('stop-btn');
 
-                if (data.running) {
+                if (data.starting) {
+                    stateText.innerText = 'STARTING...';
+                    stateText.style.color = '#ff9800'; // Orange for starting
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false; // Allow stopping even during startup
+                } else if (data.running) {
                     stateText.innerText = 'RUNNING';
                     stateText.style.color = '#4caf50';
                     startBtn.disabled = true;
-                    // Stop button is clickable only when start has been pressed and agent is running
                     stopBtn.disabled = false;
                 } else {
                     stateText.innerText = 'STOPPED';
                     stateText.style.color = '#f44336';
                     startBtn.disabled = false;
-                    // Stop button remains greyed out and unclickable until Start is pressed
                     stopBtn.disabled = true;
                 }
             } catch (err) {
@@ -210,28 +221,29 @@
 
         document.getElementById('start-btn').addEventListener('click', async () => {
             const startBtn = document.getElementById('start-btn');
-            startBtn.disabled = true; // Immediately gray out
+            const stopBtn = document.getElementById('stop-btn');
+            startBtn.disabled = true;
             startBtn.innerText = 'Starting...';
+            stopBtn.disabled = false;
 
             try {
                 await fetch('/api/start', { method: 'POST' });
             } finally {
                 startBtn.innerText = 'Start';
-                // Note: checkStatus will keep it disabled if it successfully started
                 await checkStatus();
             }
         });
 
         document.getElementById('stop-btn').addEventListener('click', async () => {
             const stopBtn = document.getElementById('stop-btn');
-            stopBtn.disabled = true; // Gray out upon pressing
+            const startBtn = document.getElementById('start-btn');
+            stopBtn.disabled = true;
             stopBtn.innerText = 'Stopping...';
 
             try {
                 await fetch('/api/stop', { method: 'POST' });
             } finally {
                 stopBtn.innerText = 'Stop';
-                // Note: checkStatus will re-enable Start button (lifting gray out)
                 await checkStatus();
             }
         });
