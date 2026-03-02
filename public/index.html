@@ -143,23 +143,32 @@
             </div>
         </header>
 
+        <div id="status-area" style="margin-bottom: 20px;">
+            <div id="agent-status" style="font-weight: bold; margin-bottom: 10px;">
+                Agent Status: <span id="run-state">Checking...</span>
+            </div>
+            <div id="status" style="color: #888;">Total Insights: 0</div>
+        </div>
+
         <main id="feedback-list">
-            <div id="agent-status" style="margin-bottom: 20px; font-weight: bold;">Agent Status: <span
-                    id="run-state">Checking...</span></div>
-            <div id="status">Scanning...</div>
+            <!-- Insights will be rendered here -->
             <div class="card">
-                <div class="meta"><span class="tag">Post</span> <span class="timestamp">2026-02-12 15:00</span></div>
-                <div class="content">Waiting for agent to collect data...</div>
+                <div class="content">Push "Start" to begin collecting insights...</div>
             </div>
         </main>
     </div>
 
     <script>
+        let hasStarted = false;
+
         async function fetchFeedback() {
-            // In a real app, this would fetch from a backend API
-            // For now, we simulate by reading a local JSON file that the agent updates
+            if (!hasStarted) {
+                return;
+            }
+
             try {
                 const response = await fetch('/feedback.json');
+                if (!response.ok) throw new Error('Not found');
                 const data = await response.json();
                 renderFeedback(data);
             } catch (err) {
@@ -167,11 +176,30 @@
             }
         }
 
+        function renderPlaceholder() {
+            const list = document.getElementById('feedback-list');
+            if (!list) return;
+            list.innerHTML = `
+                <div class="card">
+                    <div class="content">Push "Start" to begin collecting insights...</div>
+                </div>
+            `;
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.innerText = 'Scanning...';
+        }
+
         function renderFeedback(items) {
             const list = document.getElementById('feedback-list');
-            const limit = parseInt(document.getElementById('post-limit').value) || 20;
-            list.innerHTML = '';
+            if (!list) return;
 
+            const limit = parseInt(document.getElementById('post-limit').value) || 20;
+
+            if (!items || items.length === 0) {
+                renderPlaceholder();
+                return;
+            }
+
+            list.innerHTML = '';
             // Limit the items shown
             const displayedItems = items.slice(-limit).reverse();
 
@@ -180,32 +208,38 @@
                 card.className = 'card';
                 card.innerHTML = `
                     <div class="meta">
-                        <span class="tag">${item.type.toUpperCase()}</span> 
+                        <span class="tag">${(item.type || 'insight').toUpperCase()}</span> 
                         <span class="timestamp">${new Date(item.timestamp).toLocaleString()}</span>
                     </div>
                     <div class="content">${item.content}</div>
                 `;
                 list.appendChild(card);
             });
-            document.getElementById('status').innerText = `Total Insights: ${items.length}`;
+
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.innerText = `Total Insights: ${items.length}`;
         }
 
         async function checkStatus() {
+            const stateText = document.getElementById('run-state');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            if (!stateText || !startBtn || !stopBtn) return;
+
             try {
                 const response = await fetch('/api/status');
+                if (!response.ok) throw new Error('Status check failed');
                 const data = await response.json();
-                const stateText = document.getElementById('run-state');
-                const startBtn = document.getElementById('start-btn');
-                const stopBtn = document.getElementById('stop-btn');
 
-                if (data.starting) {
-                    stateText.innerText = 'STARTING...';
-                    stateText.style.color = '#ff9800'; // Orange for starting
-                    startBtn.disabled = true;
-                    stopBtn.disabled = false; // Allow stopping even during startup
-                } else if (data.running) {
-                    stateText.innerText = 'RUNNING';
-                    stateText.style.color = '#4caf50';
+                if (data.starting || data.running) {
+                    hasStarted = true;
+                    if (data.starting) {
+                        stateText.innerText = 'STARTING...';
+                        stateText.style.color = '#ff9800';
+                    } else {
+                        stateText.innerText = 'RUNNING';
+                        stateText.style.color = '#4caf50';
+                    }
                     startBtn.disabled = true;
                     stopBtn.disabled = false;
                 } else {
@@ -215,64 +249,77 @@
                     stopBtn.disabled = true;
                 }
             } catch (err) {
-                console.error('Failed to check status');
+                console.error('Failed to check status:', err);
+                // Fallback: if we can't reach the server, allow user to try starting again
+                stateText.innerText = 'OFFLINE';
+                stateText.style.color = '#888';
+                startBtn.disabled = false;
             }
         }
 
         document.getElementById('start-btn').addEventListener('click', async () => {
             const startBtn = document.getElementById('start-btn');
-            const stopBtn = document.getElementById('stop-btn');
             startBtn.disabled = true;
             startBtn.innerText = 'Starting...';
-            stopBtn.disabled = false;
 
             try {
-                await fetch('/api/start', { method: 'POST' });
+                const res = await fetch('/api/start', { method: 'POST' });
+                if (res.ok) {
+                    hasStarted = true;
+                    await checkStatus();
+                    await fetchFeedback();
+                }
+            } catch (err) {
+                console.error('Start failed', err);
             } finally {
                 startBtn.innerText = 'Start';
-                await checkStatus();
+                await checkStatus(); // Ensure UI is in sync
             }
         });
 
         document.getElementById('stop-btn').addEventListener('click', async () => {
             const stopBtn = document.getElementById('stop-btn');
-            const startBtn = document.getElementById('start-btn');
             stopBtn.disabled = true;
             stopBtn.innerText = 'Stopping...';
 
             try {
-                await fetch('/api/stop', { method: 'POST' });
+                const res = await fetch('/api/stop', { method: 'POST' });
+                if (res.ok) {
+                    await checkStatus();
+                }
+            } catch (err) {
+                console.error('Stop failed', err);
             } finally {
                 stopBtn.innerText = 'Stop';
-                await checkStatus();
+                await checkStatus(); // Ensure UI is in sync
             }
         });
 
         document.getElementById('refresh-btn').addEventListener('click', async () => {
             const btn = document.getElementById('refresh-btn');
             const originalText = btn.innerText;
-            btn.innerText = 'Refreshing...';
+            btn.innerText = 'Resetting & Refreshing...';
             btn.disabled = true;
 
             try {
+                // Stop the agent to reset button states
+                await fetch('/api/stop', { method: 'POST' });
+
+                // Ensure we can show data
+                hasStarted = true;
+
+                // Sync UI buttons (will enable Start, disable Stop)
+                await checkStatus();
+
+                // Fetch latest data
                 await fetchFeedback();
-
-                const statusRes = await fetch('/api/status');
-                const statusData = await statusRes.json();
-
-                // Automatically triggers start if agent isn't already running
-                if (!statusData.running) {
-                    console.log('Refresh triggered agent start...');
-                    await fetch('/api/start', { method: 'POST' });
-                    await checkStatus();
-                }
             } catch (err) {
-                console.error('Refresh/Start sequence failed', err);
+                console.error('Refresh task failed', err);
             } finally {
                 setTimeout(() => {
                     btn.innerText = originalText;
                     btn.disabled = false;
-                }, 500);
+                }, 1000);
             }
         });
 
@@ -280,8 +327,12 @@
 
         setInterval(fetchFeedback, 5000);
         setInterval(checkStatus, 3000);
-        fetchFeedback();
-        checkStatus();
+
+        // Initial setup
+        checkStatus().then(() => {
+            if (hasStarted) fetchFeedback();
+            else renderPlaceholder();
+        });
     </script>
 </body>
 
