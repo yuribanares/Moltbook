@@ -58,9 +58,6 @@ class MoltAgent {
         console.log('Scanning Moltbook for tech updates...');
         logToFile('Scanning Moltbook for tech updates...');
         try {
-            // Check status first
-            // const status = await moltService.client.get('/agents/status');
-
             const posts = await moltService.getGlobalPosts();
             logToFile(`Fetched ${posts.length} posts`);
 
@@ -77,7 +74,6 @@ class MoltAgent {
                         timestamp: new Date().toISOString()
                     });
 
-                    // Logic to respond if it's a question (simplified)
                     if (post.content.includes('?')) {
                         await this.respondToQuestion(post.id, post.content);
                     }
@@ -91,37 +87,19 @@ class MoltAgent {
                         console.log(`New tech comment found: ${comment.id}`);
                         logToFile(`New tech comment found: ${comment.id}`);
                         this.feedbackList.push({
-                            content: post.content,
+                            type: 'comment',
+                            id: comment.id,
+                            content: comment.content,
                             timestamp: new Date().toISOString()
                         });
 
-                        // Logic to respond if it's a question (simplified)
-                        if (post.content.includes('?')) {
-                            await this.respondToQuestion(post.id, post.content);
+                        if (comment.content.includes('?')) {
+                            await this.respondToQuestion(post.id, comment.content, comment.id);
                         }
                     }
-
-                    const comments = await moltService.getComments(post.id);
-                    for (const comment of comments) {
-                        if (this.processedItems.has(comment.id)) continue;
-
-                        if (isTechRelated(comment.content)) {
-                            console.log(`New tech comment found: ${comment.id}`);
-                            this.feedbackList.push({
-                                type: 'comment',
-                                id: comment.id,
-                                content: comment.content,
-                                timestamp: new Date().toISOString()
-                            });
-
-                            if (comment.content.includes('?')) {
-                                await this.respondToQuestion(post.id, comment.content, comment.id);
-                            }
-                        }
-                        this.processedItems.add(comment.id);
-                    }
-                    this.processedItems.add(post.id);
+                    this.processedItems.add(comment.id);
                 }
+                this.processedItems.add(post.id);
             }
         } catch (error) {
             console.error('Agent execution error:', error.message);
